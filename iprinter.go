@@ -2,102 +2,215 @@ package dsky
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"sort"
+	"strings"
 
 	"github.com/gosuri/uitable"
 )
 
-type InteractivePrinter struct {
-	out      io.Writer
-	errout   io.Writer
+type InteractiveMode struct {
 	sections []*Section
+	common
 }
 
-func NewInteractivePrinter(out, errout io.Writer) *InteractivePrinter {
+func NewInteractiveMode(out, errout io.Writer) *InteractiveMode {
 	if out == nil {
 		out = os.Stdout
 	}
 	if errout == nil {
 		errout = os.Stderr
 	}
-	return &InteractivePrinter{
-		out:      out,
-		errout:   errout,
+	m := &InteractiveMode{
 		sections: make([]*Section, 0),
 	}
+	m.modeType = ModeTypeInteractive
+	m.out = out
+	m.errout = errout
+	m.logger = NewInteractiveLogger(errout)
+	return m
 }
 
-func (i *InteractivePrinter) NewSection(id string) *Section {
+func (m *InteractiveMode) When(mtype ModeType, fn runF) Mode {
+	if mtype == m.modeType {
+		m.runners = append(m.runners, fn)
+	}
+	return m
+}
+
+func (i *InteractiveMode) Printer() Printer {
+	return i
+}
+
+func (i *InteractiveMode) Log() Logger {
+	return i.logger
+}
+
+func (i *InteractiveMode) NewSection(id string) *Section {
 	s := &Section{ID: id}
 	i.sections = append(i.sections, s)
 	return s
 }
 
-func (i *InteractivePrinter) WithSection(s *Section) *InteractivePrinter {
+func (i *InteractiveMode) WithSection(s *Section) Printer {
 	i.sections = append(i.sections, s)
 	return i
 }
 
-func (i *InteractivePrinter) Flush() error {
+func (i *InteractiveMode) Flush() error {
 	var buf bytes.Buffer
 	for _, sec := range i.sections {
-		buf.Write(i.FormatSectionData(sec.Data))
+		if sec == nil {
+			continue
+		}
+		if len(sec.ID) == 0 {
+			return errors.New("dksy: section needs a title")
+		}
+
+		title := sec.ID
+		if len(sec.Label) > 0 {
+			title = sec.Label
+		}
+		buf.WriteString("\n")
+		buf.WriteString(NewTitle(title).H1().String())
+		buf.WriteString("\n")
+		d, err := sec.Data.Marshal(i)
+		if err != nil {
+			return err
+		}
+		buf.Write(d)
+		buf.WriteString("\n")
 	}
-	fmt.Fprint(i.out, buf.String())
+	if _, err := fmt.Fprintln(i.out, buf.String()); err != nil {
+		return err
+	}
 	return nil
 }
 
-func (i *InteractivePrinter) FormatSectionData(dv *SectionData) []byte {
+func (i *InteractiveMode) MarshalSectionData(dv *SectionData) ([]byte, error) {
+	return i.marshalSectionData(0, dv)
+}
+
+func (i *InteractiveMode) marshalSectionData(depth int, dv *SectionData) ([]byte, error) {
+	if dv == nil {
+		return nil, nil
+	}
 	switch dv.Style() {
 	case SectionDataStylePane:
-		return i.formatSDPane(dv)
+		return i.formatSDPane(depth, dv)
 	case SectionDataStyleList:
-		return i.formatDataViewList(dv)
+		return i.formatSDList(depth, dv)
+	default:
+		return nil, fmt.Errorf("dsky: invalid section data style")
 	}
-	return nil
+	return nil, nil
 }
 
-func (i *InteractivePrinter) formatSDPane(dv *SectionData) []byte {
-	t := uitable.New()
-	t.Wrap = true
-	for _, label := range dv.Labels() {
-		items := dv.Data()[label]
+func (i *InteractiveMode) formatSDPane(depth int, sectionData *SectionData) ([]byte, error) {
+	wrapper := uitable.New()
+	wrapper.Wrap = true
+	// for each ID, create a row in the wrapper table
+	for _, id := range sectionData.IDs() {
+		// fetch the items for the id
+		items := sectionData.Data()[id]
 		if len(items) == 0 {
-			return nil
+			return nil, nil
 		}
-		cellItems := []interface{}{label}
-		vt := uitable.New()
-		vt.Wrap = true
-		for _, value := range items {
-			var buf bytes.Buffer
-			switch v := value.(type) {
-			case *SectionData:
-				buf.Write(i.FormatSectionData(v))
-			case map[string]interface{}:
-				mt := uitable.New()
-				mt.Wrap = true
-				for key, val := range v {
-					switch mv := val.(type) {
-					case *SectionData:
-						mt.AddRow(key, string(i.FormatSectionData(mv)))
-					default:
-						mt.AddRow(key, fmt.Sprintf("%v", mv))
-					}
-				}
-				buf.WriteString(mt.String())
-			default:
-				buf.WriteString(fmt.Sprintf("%v", v))
+		// use the label for the id as row name, if any
+		label := id
+		if l := sectionData.Label(id); len(l) > 0 {
+			label = l
+		}
+		label = fmt.Sprintf("%s: ", label)
+		// row items with the label as caption
+		ritems := []interface{}{label}
+		for _, v := range items {
+			s, err := i.parsesd(v, depth)
+			if err != nil {
+				return nil, err
 			}
-			vt.AddRow(buf.String())
+
+			ritems = append(ritems, s)
 		}
-		cellItems = append(cellItems, vt.String())
-		t.AddRow(cellItems...)
+		// add the row to the wrapper table
+		wrapper.AddRow(ritems...)
 	}
-	return t.Bytes()
+	return wrapper.Bytes(), nil
 }
 
-func (i *InteractivePrinter) formatDataViewList(dv *SectionData) []byte {
-	return nil
+func (i *InteractiveMode) formatSDList(depth int, sectionData *SectionData) ([]byte, error) {
+	wrapper := uitable.New()
+	wrapper.Wrap = true
+	// create the header column with ids as the captions
+	var headers []interface{}
+	//var ids []interface{}
+
+	var lc int // linecount
+	// set the headers and the line count
+	for _, id := range sectionData.IDs() {
+		// use the label for the id as row name, if any
+		label := id
+		if l := sectionData.Label(id); len(l) > 0 {
+			label = l
+		}
+		tl := NewTitle(label)
+		switch depth {
+		case 0:
+			label = tl.H2().String()
+		default:
+			label = tl.H3().String()
+		}
+		headers = append(headers, label)
+		if clc := len(sectionData.Data()[id]); clc > lc {
+			lc = clc
+		}
+	}
+
+	wrapper.AddRow(headers...)
+	// allocate a two-dimentional array of cells for each line and add size them
+	rows := make([][]interface{}, len(sectionData.Rows()))
+	for line := 0; line < lc; line++ {
+		rows[line] = make([]interface{}, len(sectionData.IDs()))
+		for sectionId := 0; sectionId < len(sectionData.IDs()); sectionId++ {
+			section := sectionData.IDs()[sectionId]
+			d, err := i.parsesd(sectionData.Data()[section][line], depth)
+			if err != nil {
+				return nil, err
+			}
+			rows[line][sectionId] = d
+		}
+		wrapper.AddRow(rows[line]...)
+	}
+	return wrapper.Bytes(), nil
+}
+
+func (i *InteractiveMode) parsesd(v interface{}, depth int) (string, error) {
+	var buf bytes.Buffer
+	switch item := v.(type) {
+	case *SectionData:
+		d, err := i.marshalSectionData(depth+1, item)
+		if err != nil {
+			return "", err
+		}
+		buf.Write(d)
+	case map[string]string:
+		var lines []string
+		var keys []string
+		for k, _ := range item {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			v := item[k]
+			lines = append(lines, fmt.Sprintf("%s: %s", k, v))
+		}
+
+		buf.WriteString(strings.Join(lines, " | "))
+	default:
+		buf.WriteString(fmt.Sprintf("%v", item))
+	}
+	return buf.String(), nil
 }
