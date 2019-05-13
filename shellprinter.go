@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -12,8 +13,11 @@ import (
 	"github.com/huandu/xstrings"
 )
 
+const ansi = "[\u001B\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[a-zA-Z\\d]*)*)?\u0007)|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))"
+
 var (
 	ShellVarPrefix = "akash"
+	re             = regexp.MustCompile(ansi)
 )
 
 type ShellMode struct {
@@ -93,11 +97,11 @@ func (s *ShellMode) MarshalSectionData(sdata *SectionData) ([]byte, error) {
 	for _, evar := range data {
 		// if this var is an array items, add it to the array declaration
 		if len(evar.arrkey) > 0 {
-			v := fmt.Sprintf("%s[%s]=%q", evar.name(), evar.arrKey(), evar.val)
+			v := fmt.Sprintf("%s[%s]=%q", evar.name(), evar.arrKey(), evar.value())
 			arrs[evar.name()] = append(arrs[evar.name()], v)
 			continue
 		}
-		nvars = append(nvars, fmt.Sprintf("%s=%q", evar.name(), evar.val))
+		nvars = append(nvars, fmt.Sprintf("%s=%q", evar.name(), evar.value()))
 	}
 
 	// render associate array declars first
@@ -129,6 +133,10 @@ type envvar struct {
 
 func (e envvar) arrKey() string {
 	return xstrings.ToSnakeCase(e.arrkey)
+}
+
+func (e envvar) value() string {
+	return re.ReplaceAllString(e.val, "")
 }
 
 func (e envvar) name() string {
@@ -167,7 +175,7 @@ func (i *ShellMode) marshalSectionData(sectionData *SectionData) ([]envvar, erro
 				}
 				for _, ev := range res {
 					vp := append([]string{sectionData.Identifier(), strconv.Itoa(rowIdx)}, ev.varname...)
-					result = append(result, envvar{varname: vp, val: ev.val, arrkey: ev.arrkey})
+					result = append(result, envvar{varname: vp, val: ev.value(), arrkey: ev.arrkey})
 				}
 			}
 		}
