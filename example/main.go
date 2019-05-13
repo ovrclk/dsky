@@ -41,9 +41,10 @@ func main() {
 	}
 
 	log := printer.Log().WithModule("broadcast")
-	log.Warn("request deployment for group(s): westcoast")
+	log.Warn("requesting deployment for group(s): westcoast")
 	log.Info("request accepted, deployment created with id: 81d79c80c4c7eb202cfd4846bb8e5328110cb299e9864674836b9fec6b536285")
 	log.WithModule("keys").Error("Unable to select a default key.\nToo many keys are stored locally to pick a default, a key is selected as the default only when there is a single key present.\nFound 3 keys instead of 1")
+	log.WithAction(dsky.LogActionDone).Info("request deployment for group(s): westcoast")
 
 	gd := printer.NewSection("Groups").WithLabel("Deployment Status").NewData().AsList()
 	for _, g := range groups {

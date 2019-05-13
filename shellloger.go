@@ -23,6 +23,10 @@ func (j *shellLogger) WithModule(string) Logger {
 	return j
 }
 
+func (j *shellLogger) WithAction(LogAction) Logger {
+	return j
+}
+
 type shellLogItem struct{}
 
 func (j *shellLogItem) Bytes() ([]byte, error) {

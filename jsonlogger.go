@@ -23,6 +23,10 @@ func (j *jsonLogger) WithModule(string) Logger {
 	return j
 }
 
+func (j *jsonLogger) WithAction(LogAction) Logger {
+	return j
+}
+
 type jsonLogItem struct{}
 
 func (j *jsonLogItem) Bytes() ([]byte, error) {

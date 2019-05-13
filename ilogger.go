@@ -11,11 +11,15 @@ import (
 	"github.com/gosuri/uitable/util/strutil"
 )
 
-var LabelWidth = 7
+var (
+	MaxLogLabelWidth = 7
+	MaxLogLineWidth  = 140
+)
 
 type interactiveLogger struct {
 	module string
 	out    io.Writer
+	LogAction
 }
 
 func NewInteractiveLogger(out io.Writer) *interactiveLogger {
@@ -27,9 +31,15 @@ func (l *interactiveLogger) WithModule(module string) Logger {
 	return l
 }
 
+func (l *interactiveLogger) WithAction(action LogAction) Logger {
+	l.LogAction = action
+	return l
+}
+
 func (l *interactiveLogger) Info(msg ...interface{}) LogItem {
 	lm := &logItem{
 		logModeType: logModeTypeInfo,
+		LogAction:   l.LogAction,
 		labelColor:  Color.Success,
 		msgColor:    Color.Hi,
 		msg:         msg,
@@ -42,6 +52,7 @@ func (l *interactiveLogger) Info(msg ...interface{}) LogItem {
 func (l *interactiveLogger) Debug(msg ...interface{}) LogItem {
 	lm := &logItem{
 		logModeType: logModeTypeDebug,
+		LogAction:   l.LogAction,
 		labelColor:  Color.Hi,
 		msgColor:    Color.Hi,
 		msg:         msg,
@@ -54,6 +65,7 @@ func (l *interactiveLogger) Debug(msg ...interface{}) LogItem {
 func (l *interactiveLogger) Warn(msg ...interface{}) LogItem {
 	lm := &logItem{
 		logModeType: logModeTypeWarn,
+		LogAction:   l.LogAction,
 		labelColor:  Color.Notice,
 		msgColor:    Color.Normal,
 		msg:         msg,
@@ -66,6 +78,7 @@ func (l *interactiveLogger) Warn(msg ...interface{}) LogItem {
 func (l *interactiveLogger) Error(msg ...interface{}) LogItem {
 	lm := &logItem{
 		logModeType: logModeTypeError,
+		LogAction:   l.LogAction,
 		labelColor:  Color.Failure,
 		msgColor:    Color.Normal,
 		msg:         msg,
@@ -82,6 +95,7 @@ func (l *interactiveLogger) writelog(lm LogItem) {
 
 type logItem struct {
 	logModeType
+	LogAction
 	labelColor *fc.Color
 	msgColor   *fc.Color
 	msg        []interface{}
@@ -101,7 +115,10 @@ func (lm *logItem) WithMessageColor(color *fc.Color) *logItem {
 func (lm *logItem) Bytes() ([]byte, error) {
 	var buf bytes.Buffer
 	label := lm.labelColor.Sprintf("(%s)", lm.logModeType)
-	label = strutil.PadRight(label, LabelWidth, ' ')
+	if len(lm.LogAction) > 0 {
+		label = lm.labelColor.Sprintf("(%s)", lm.LogAction)
+	}
+	label = strutil.PadRight(label, MaxLogLabelWidth, ' ')
 	msg := []string{}
 
 	if len(lm.module) > 0 {
@@ -120,7 +137,7 @@ func (lm *logItem) Bytes() ([]byte, error) {
 		}
 	}
 
-	buf.WriteString(prefixedMsg(label, strings.Join(msg, " "), 140))
+	buf.WriteString(prefixedMsg(label, strings.Join(msg, " "), MaxLogLineWidth))
 	return buf.Bytes(), nil
 }
 
@@ -132,9 +149,9 @@ func (lm *logItem) String() (string, error) {
 	return string(b), nil
 }
 
-func prefixedMsg(label string, msg string, width uint) string {
+func prefixedMsg(label string, msg string, width int) string {
 	var buf bytes.Buffer
-	cell := &uitable.Cell{Width: width, Wrap: true, Data: msg}
+	cell := &uitable.Cell{Width: uint(width), Wrap: true, Data: msg}
 
 	var lines []string
 	for i, line := range strings.Split(cell.String(), "\n") {
