@@ -97,7 +97,7 @@ func (s *ShellMode) MarshalSectionData(sdata *SectionData) ([]byte, error) {
 	for _, evar := range data {
 		// if this var is an array items, add it to the array declaration
 		if len(evar.arrkey) > 0 {
-			v := fmt.Sprintf("%s[%s]=%q", evar.name(), evar.arrKey(), evar.value())
+			v := fmt.Sprintf("%s_%s=%q", evar.name(), evar.arrKey(), evar.value())
 			arrs[evar.name()] = append(arrs[evar.name()], v)
 			continue
 		}
@@ -105,10 +105,12 @@ func (s *ShellMode) MarshalSectionData(sdata *SectionData) ([]byte, error) {
 	}
 
 	// render associate array declars first
-	for aname, _ := range arrs {
-		buf.WriteString(fmt.Sprintf("declare -A %s", aname))
-		buf.WriteString("\n")
-	}
+	// Ignore the declares for now as its not eval friendly
+	// for aname, _ := range arrs {
+	// 	buf.WriteString(fmt.Sprintf("declare -A %s", aname))
+	// 	buf.WriteString("\n")
+	// }
+
 	// array items
 	for _, arr := range arrs {
 		for _, v := range arr {
