@@ -168,21 +168,22 @@ func (i *InteractiveMode) formatSDList(depth int, sectionData *SectionData) ([]b
 			lc = clc
 		}
 	}
-
 	wrapper.AddRow(headers...)
-	// allocate a two-dimentional array of cells for each line and add size them
-	rows := make([][]interface{}, len(sectionData.Rows()))
-	for line := 0; line < lc; line++ {
-		rows[line] = make([]interface{}, len(sectionData.IDs()))
-		for sectionId := 0; sectionId < len(sectionData.IDs()); sectionId++ {
-			section := sectionData.IDs()[sectionId]
-			d, err := i.parsesd(sectionData.Data()[section][line], depth)
-			if err != nil {
-				return nil, err
+	for rowIdx := 0; rowIdx < len(sectionData.Rows()); rowIdx++ {
+		rowItems := make([]interface{}, 0)
+		for cellIdx := 0; cellIdx < len(headers); cellIdx++ {
+			if len(sectionData.Rows()[rowIdx]) > cellIdx {
+				d, err := i.parsesd(sectionData.Rows()[rowIdx][cellIdx], depth)
+				if err != nil {
+					return nil, err
+				}
+				rowItems = append(rowItems, d)
+				continue
 			}
-			rows[line][sectionId] = d
+			// insert empty row
+			rowItems = append(rowItems, "")
 		}
-		wrapper.AddRow(rows[line]...)
+		wrapper.AddRow(rowItems...)
 	}
 	return wrapper.Bytes(), nil
 }
