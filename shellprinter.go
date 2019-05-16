@@ -21,7 +21,7 @@ var (
 )
 
 type ShellMode struct {
-	sections []*Section
+	sections []Section
 	common
 }
 
@@ -33,7 +33,7 @@ func NewShellMode(out, errout io.Writer) *ShellMode {
 		errout = os.Stderr
 	}
 	s := &ShellMode{
-		sections: make([]*Section, 0),
+		sections: make([]Section, 0),
 	}
 	s.modeType = ModeTypeShell
 	s.out = out
@@ -53,13 +53,13 @@ func (m *ShellMode) When(mtype ModeType, fn runF) Mode {
 	return m
 }
 
-func (i *ShellMode) NewSection(id string) *Section {
-	s := &Section{ID: id}
+func (i *ShellMode) NewSection(id string) Section {
+	s := NewSection(id)
 	i.sections = append(i.sections, s)
 	return s
 }
 
-func (i *ShellMode) WithSection(s *Section) Printer {
+func (i *ShellMode) WithSection(s Section) Printer {
 	i.sections = append(i.sections, s)
 	return i
 }
@@ -70,7 +70,7 @@ func (i *ShellMode) Flush() error {
 		if sec == nil {
 			continue
 		}
-		d, err := sec.Data.Marshal(i)
+		d, err := sec.Data().Marshal(i)
 		if err != nil {
 			return err
 		}
@@ -82,7 +82,7 @@ func (i *ShellMode) Flush() error {
 	return nil
 }
 
-func (s *ShellMode) MarshalSectionData(sdata *SectionData) ([]byte, error) {
+func (s *ShellMode) MarshalSectionData(sdata SectionData) ([]byte, error) {
 	var buf bytes.Buffer
 	data, err := s.marshalSectionData(sdata)
 	if err != nil {
@@ -150,7 +150,7 @@ func fmtVarName(v string) string {
 	return fmt.Sprintf("%s_%s", ShellVarPrefix, strings.ToLower(v))
 }
 
-func (i *ShellMode) marshalSectionData(sectionData *SectionData) ([]envvar, error) {
+func (i *ShellMode) marshalSectionData(sectionData SectionData) ([]envvar, error) {
 	var result []envvar
 	for rowIdx, row := range sectionData.Rows() {
 		for colIdx, cell := range row {
@@ -170,7 +170,7 @@ func (i *ShellMode) marshalSectionData(sectionData *SectionData) ([]envvar, erro
 					vp := []string{sectionData.Identifier(), strconv.Itoa(rowIdx), secname}
 					result = append(result, envvar{varname: vp, val: v, arrkey: k})
 				}
-			case *SectionData:
+			case SectionData:
 				res, err := i.marshalSectionData(item)
 				if err != nil {
 					return nil, err

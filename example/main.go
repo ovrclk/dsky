@@ -64,9 +64,11 @@ func main() {
 		gp.
 			Add("Sequence", g.Seq).
 			Add("Name", g.name).
+			Add("Extra", "this should be hidden").
 			Add("Requirements", g.req).
 			Add("Resources", g.resources)
 	}
+	gp.Hide("Extra")
 	data.Add("Groups", gp)
 
 	fp := dsky.NewSectionData("").AsList()

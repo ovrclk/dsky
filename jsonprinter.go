@@ -11,7 +11,7 @@ import (
 )
 
 type JSONMode struct {
-	sections []*Section
+	sections []Section
 	common
 }
 
@@ -23,7 +23,7 @@ func NewJSONMode(out, errout io.Writer) *JSONMode {
 		errout = os.Stderr
 	}
 	m := &JSONMode{
-		sections: make([]*Section, 0),
+		sections: make([]Section, 0),
 	}
 	m.modeType = ModeTypeJSON
 	m.out = out
@@ -43,13 +43,13 @@ func (i *JSONMode) Printer() Printer {
 	return i
 }
 
-func (i *JSONMode) NewSection(id string) *Section {
-	s := &Section{ID: id}
+func (i *JSONMode) NewSection(id string) Section {
+	s := NewSection(id)
 	i.sections = append(i.sections, s)
 	return s
 }
 
-func (i *JSONMode) WithSection(s *Section) Printer {
+func (i *JSONMode) WithSection(s Section) Printer {
 	i.sections = append(i.sections, s)
 	return i
 }
@@ -60,12 +60,12 @@ func (i *JSONMode) Flush() error {
 		if sec == nil {
 			continue
 		}
-		b, err := sec.Data.Marshal(i)
+		b, err := sec.Data().Marshal(i)
 		if err != nil {
 			return err
 		}
 		buf.Write(b)
-		if raw := sec.Data.Tag("raw"); raw != nil {
+		if raw := sec.Data().Tag("raw"); raw != nil {
 			dat := map[string]interface{}{"raw": raw}
 			d, err := json.Marshal(dat)
 			if err != nil {
@@ -79,7 +79,7 @@ func (i *JSONMode) Flush() error {
 	return nil
 }
 
-func (i *JSONMode) MarshalSectionData(sectionData *SectionData) ([]byte, error) {
+func (i *JSONMode) MarshalSectionData(sectionData SectionData) ([]byte, error) {
 	d, err := i.marshalSectionData(sectionData)
 	if err != nil {
 		return nil, err
@@ -88,7 +88,7 @@ func (i *JSONMode) MarshalSectionData(sectionData *SectionData) ([]byte, error) 
 	return json.Marshal(map[string]interface{}{id: d})
 }
 
-func (i *JSONMode) marshalSectionData(sectionData *SectionData) (interface{}, error) {
+func (i *JSONMode) marshalSectionData(sectionData SectionData) (interface{}, error) {
 	var recc int // record count
 	// get the records count
 	for _, id := range sectionData.IDs() {
@@ -100,7 +100,7 @@ func (i *JSONMode) marshalSectionData(sectionData *SectionData) (interface{}, er
 	for rowidx, row := range sectionData.Rows() {
 		recs[rowidx] = make(map[string]interface{})
 		for colidx, secdata := range row {
-			if v, ok := secdata.(*SectionData); ok {
+			if v, ok := secdata.(SectionData); ok {
 				d, err := i.marshalSectionData(v)
 				if err != nil {
 					return nil, err

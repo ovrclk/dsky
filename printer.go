@@ -5,8 +5,8 @@ import (
 )
 
 type Printer interface {
-	NewSection(id string) *Section
-	WithSection(*Section) Printer
+	NewSection(id string) Section
+	WithSection(Section) Printer
 	Flush() error
 	Log() Logger
 }

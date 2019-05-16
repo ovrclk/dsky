@@ -13,7 +13,7 @@ import (
 )
 
 type InteractiveMode struct {
-	sections []*Section
+	sections []Section
 	common
 }
 
@@ -25,7 +25,7 @@ func NewInteractiveMode(out, errout io.Writer) *InteractiveMode {
 		errout = os.Stderr
 	}
 	m := &InteractiveMode{
-		sections: make([]*Section, 0),
+		sections: make([]Section, 0),
 	}
 	m.modeType = ModeTypeInteractive
 	m.out = out
@@ -49,13 +49,13 @@ func (i *InteractiveMode) Log() Logger {
 	return i.logger
 }
 
-func (i *InteractiveMode) NewSection(id string) *Section {
-	s := &Section{ID: id}
+func (i *InteractiveMode) NewSection(id string) Section {
+	s := NewSection(id)
 	i.sections = append(i.sections, s)
 	return s
 }
 
-func (i *InteractiveMode) WithSection(s *Section) Printer {
+func (i *InteractiveMode) WithSection(s Section) Printer {
 	i.sections = append(i.sections, s)
 	return i
 }
@@ -66,18 +66,18 @@ func (i *InteractiveMode) Flush() error {
 		if sec == nil {
 			continue
 		}
-		if len(sec.ID) == 0 {
+		if len(sec.ID()) == 0 {
 			return errors.New("dksy: section needs a title")
 		}
 
-		title := sec.ID
-		if len(sec.Label) > 0 {
-			title = sec.Label
+		title := sec.ID()
+		if len(sec.Label()) > 0 {
+			title = sec.Label()
 		}
 		buf.WriteString("\n")
 		buf.WriteString(NewTitle(title).H1().String())
 		buf.WriteString("\n")
-		d, err := sec.Data.Marshal(i)
+		d, err := sec.Data().Marshal(i)
 		if err != nil {
 			return err
 		}
@@ -90,11 +90,11 @@ func (i *InteractiveMode) Flush() error {
 	return nil
 }
 
-func (i *InteractiveMode) MarshalSectionData(dv *SectionData) ([]byte, error) {
+func (i *InteractiveMode) MarshalSectionData(dv SectionData) ([]byte, error) {
 	return i.marshalSectionData(0, dv)
 }
 
-func (i *InteractiveMode) marshalSectionData(depth int, dv *SectionData) ([]byte, error) {
+func (i *InteractiveMode) marshalSectionData(depth int, dv SectionData) ([]byte, error) {
 	if dv == nil {
 		return nil, nil
 	}
@@ -109,7 +109,7 @@ func (i *InteractiveMode) marshalSectionData(depth int, dv *SectionData) ([]byte
 	return nil, nil
 }
 
-func (i *InteractiveMode) formatSDPane(depth int, sectionData *SectionData) ([]byte, error) {
+func (i *InteractiveMode) formatSDPane(depth int, sectionData SectionData) ([]byte, error) {
 	wrapper := uitable.New()
 	wrapper.Wrap = true
 	// for each ID, create a row in the wrapper table
@@ -141,7 +141,7 @@ func (i *InteractiveMode) formatSDPane(depth int, sectionData *SectionData) ([]b
 	return wrapper.Bytes(), nil
 }
 
-func (i *InteractiveMode) formatSDList(depth int, sectionData *SectionData) ([]byte, error) {
+func (i *InteractiveMode) formatSDList(depth int, sectionData SectionData) ([]byte, error) {
 	wrapper := uitable.New()
 	wrapper.Wrap = true
 	// create the header column with ids as the captions
@@ -191,7 +191,7 @@ func (i *InteractiveMode) formatSDList(depth int, sectionData *SectionData) ([]b
 func (i *InteractiveMode) parsesd(v interface{}, depth int) (string, error) {
 	var buf bytes.Buffer
 	switch item := v.(type) {
-	case *SectionData:
+	case SectionData:
 		d, err := i.marshalSectionData(depth+1, item)
 		if err != nil {
 			return "", err
