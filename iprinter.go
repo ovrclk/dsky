@@ -189,6 +189,10 @@ func (i *InteractiveMode) formatSDList(depth int, sectionData SectionData) ([]by
 }
 
 func (i *InteractiveMode) parsesd(v interface{}, depth int) (string, error) {
+	// return empty string when nil
+	if v == nil {
+		return "", nil
+	}
 	var buf bytes.Buffer
 	switch item := v.(type) {
 	case SectionData:
