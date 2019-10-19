@@ -65,18 +65,9 @@ func (i *JSONMode) Flush() error {
 			return err
 		}
 		buf.Write(b)
-		if raw := sec.Data().Tag("raw"); raw != nil {
-			dat := map[string]interface{}{"raw": raw}
-			d, err := json.Marshal(dat)
-			if err != nil {
-				return err
-			}
-			buf.Write(d)
-		}
-
 	}
-	fmt.Fprintln(i.out, buf.String())
-	return nil
+	_, err := fmt.Fprintln(i.out, buf.String())
+	return err
 }
 
 func (i *JSONMode) MarshalSectionData(sectionData SectionData) ([]byte, error) {
@@ -85,7 +76,11 @@ func (i *JSONMode) MarshalSectionData(sectionData SectionData) ([]byte, error) {
 		return nil, err
 	}
 	id := xstrings.ToSnakeCase(sectionData.Identifier())
-	return json.Marshal(map[string]interface{}{id: d})
+	res := map[string]interface{}{id: d}
+	if raw := sectionData.Tag("raw"); raw != nil {
+		res["raw"] = raw
+	}
+	return json.Marshal(res)
 }
 
 func (i *JSONMode) marshalSectionData(sectionData SectionData) (interface{}, error) {
